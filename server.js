@@ -44,11 +44,14 @@ app.post('/transcrever', async (req, res) => {
     console.log(`🔍 Verificando duração do vídeo...`);
 
     const duracao = await new Promise((resolve, reject) => {
-        const proc = spawn(ytDlpPath, ['--print', 'duration', url], { shell: process.platform === 'win32' });
+        const proc = spawn(ytDlpPath, ['--js-runtimes', 'node:node', '--print', 'duration', url], { shell: process.platform === 'win32' });
         let output = '';
+        let errOutput = '';
         proc.stdout.on('data', d => output += d);
+        proc.stderr.on('data', d => errOutput += d);
         proc.on('close', code => {
-            if (code !== 0) return reject('Erro ao obter duração');
+            if (errOutput) console.error(`⚠️ yt-dlp stderr: ${errOutput.trim()}`);
+            if (code !== 0) return reject(`Erro ao obter duração (exit ${code}): ${errOutput.trim() || 'sem detalhes'}`);
             resolve(parseFloat(output.trim()));
         });
         proc.on('error', reject);
@@ -70,11 +73,14 @@ app.post('/transcrever', async (req, res) => {
     console.log(`🚀 Processando: ${url}`);
 
     const downloader = spawn(ytDlpPath, [
-        '--no-playlist', '-x', '--audio-format', 'mp3', '-o', audioFile, url
+        '--js-runtimes', 'node:node', '--no-playlist', '-x', '--audio-format', 'mp3', '-o', audioFile, url
     ], { shell: process.platform === 'win32' });
+    let dlErr = '';
+    downloader.stderr.on('data', d => dlErr += d);
 
     downloader.on('close', async (code) => {
-        if (code !== 0) return res.status(500).json({ error: 'Erro no download' });
+        if (dlErr) console.error(`⚠️ yt-dlp download stderr: ${dlErr.trim()}`);
+        if (code !== 0) return res.status(500).json({ error: 'Erro no download', details: dlErr.trim() || null });
 
         const formData = new FormData();
         formData.append('file', fs.createReadStream(audioFile));
