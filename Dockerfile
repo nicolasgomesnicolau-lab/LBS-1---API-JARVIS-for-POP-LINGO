@@ -19,4 +19,4 @@ ENV YT_DLP_PATH=yt-dlp
 
 EXPOSE 3000
 
-CMD ["node", "index.js"]
+CMD ["node", "server.js"]
