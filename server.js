@@ -78,6 +78,15 @@ app.post('/cookies', authMiddleware, async (req, res) => {
     }
 });
 
+function getRequestOptions() {
+    const opts = {};
+    if (fs.existsSync(COOKIE_FILE)) {
+        const raw = fs.readFileSync(COOKIE_FILE, 'utf-8').trim();
+        if (raw) opts.headers = { Cookie: raw };
+    }
+    return opts;
+}
+
 app.post('/transcrever', async (req, res) => {
     try {
         const { url } = req.body;
@@ -90,16 +99,26 @@ app.post('/transcrever', async (req, res) => {
 
         let duration;
         try {
-            const ytRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
-                params: { id: videoId, part: 'contentDetails', key: YOUTUBE_API_KEY }
-            });
-            if (!ytRes.data.items || ytRes.data.items.length === 0) {
-                return res.status(400).json({ error: 'Vídeo não encontrado' });
+            const info = await ytdl.getInfo(videoId, { requestOptions: getRequestOptions() });
+            duration = parseInt(info.videoDetails.lengthSeconds, 10);
+        } catch (ytdlErr) {
+            console.error(`⚠️ ytdl-core erro: ${ytdlErr.message}`);
+            if (!YOUTUBE_API_KEY) {
+                return res.status(500).json({ error: 'Erro ao buscar vídeo. Tente renovar os cookies em POST /cookies.', details: ytdlErr.message });
             }
-            duration = parseISO8601(ytRes.data.items[0].contentDetails.duration);
-        } catch (ytErr) {
-            console.error(`⚠️ YouTube API erro:`, ytErr.response?.data || ytErr.message);
-            return res.status(500).json({ error: 'Erro ao buscar dados do vídeo', details: ytErr.message });
+            console.log(`↩️ Fallback para YouTube API...`);
+            try {
+                const ytRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+                    params: { id: videoId, part: 'contentDetails', key: YOUTUBE_API_KEY }
+                });
+                if (!ytRes.data.items || ytRes.data.items.length === 0) {
+                    return res.status(400).json({ error: 'Vídeo não encontrado' });
+                }
+                duration = parseISO8601(ytRes.data.items[0].contentDetails.duration);
+            } catch (ytErr) {
+                console.error(`⚠️ YouTube API erro:`, ytErr.response?.data || ytErr.message);
+                return res.status(500).json({ error: 'Erro ao buscar dados do vídeo', details: ytErr.message });
+            }
         }
 
         if (duration > MAX_DURATION) {
@@ -116,13 +135,8 @@ app.post('/transcrever', async (req, res) => {
         const timestamp = Date.now();
         const audioFile = path.join(outputFolder, `audio_${timestamp}.webm`);
 
-        const requestOptions = {};
-        if (fs.existsSync(COOKIE_FILE)) {
-            const raw = fs.readFileSync(COOKIE_FILE, 'utf-8').trim();
-            if (raw) requestOptions.headers = { Cookie: raw };
-        }
         await new Promise((resolve, reject) => {
-            const stream = ytdl(videoId, { filter: 'audioonly', quality: 'lowestaudio', requestOptions });
+            const stream = ytdl(videoId, { filter: 'audioonly', quality: 'lowestaudio', requestOptions: getRequestOptions() });
             const fileStream = fs.createWriteStream(audioFile);
             stream.pipe(fileStream);
             stream.on('end', resolve);
