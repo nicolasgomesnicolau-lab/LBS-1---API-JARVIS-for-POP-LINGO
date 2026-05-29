@@ -80,10 +80,10 @@ app.post('/transcrever', async (req, res) => {
 
         console.log(`✅ Duração: ${Math.floor(duracao / 60)}min ${Math.floor(duracao % 60)}s`);
         const timestamp = Date.now();
-        const audioFile = path.join(outputFolder, `audio_${timestamp}.mp3`);
+        const audioFile = path.join(outputFolder, `audio_${timestamp}.webm`);
 
         console.log(`🚀 Baixando áudio...`);
-        const downloader = spawn(ytDlpPath, ['--no-playlist', '-x', '--audio-format', 'mp3', '-o', audioFile, url], { shell: true });
+        const downloader = spawn(ytDlpPath, ['--no-playlist', '-f', 'bestaudio[ext=webm]', '-o', audioFile, url], { shell: true });
 
         downloader.on('close', async (code) => {
             if (code !== 0) return res.status(500).json({ error: 'Erro no download' });
