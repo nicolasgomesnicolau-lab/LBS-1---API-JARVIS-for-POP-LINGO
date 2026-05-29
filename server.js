@@ -1,13 +1,14 @@
 require('dotenv').config();
 
 const express = require('express');
-const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const ytdl = require('@distube/ytdl-core');
+const { spawn } = require('child_process');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -15,10 +16,9 @@ app.use(express.json());
 app.use(cors());
 
 const API_KEY = process.env.API_KEY;
-const outputFolder = process.env.OUTPUT_FOLDER || '/tmp/jarvis-audios';
-const ytDlpPath = process.env.YT_DLP_PATH || 'yt-dlp';
-const ytArgs = ['--js-runtimes', 'node:node', '--extractor-args', 'youtube:player_client=android_embedded,android,tv_embedded,web', '--user-agent', 'Mozilla/5.0 (Linux; Android 14; Pixel 9) AppleWebKit/537.36'];
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+const outputFolder = process.env.OUTPUT_FOLDER || '/tmp/jarvis-audios';
 const MAX_DURATION = parseInt(process.env.MAX_DURATION) || 600;
 
 if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
@@ -38,77 +38,107 @@ const limiter = rateLimit({
 });
 app.use('/transcrever', limiter, authMiddleware);
 
+function extractVideoId(url) {
+    const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+        /^([a-zA-Z0-9_-]{11})$/
+    ];
+    for (const p of patterns) {
+        const m = url.match(p);
+        if (m) return m[1];
+    }
+    return null;
+}
+
+function parseISO8601(duration) {
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!match) return 0;
+    const h = parseInt(match[1] || 0, 10);
+    const m = parseInt(match[2] || 0, 10);
+    const s = parseInt(match[3] || 0, 10);
+    return h * 3600 + m * 60 + s;
+}
+
 app.post('/transcrever', async (req, res) => {
     try {
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'URL faltando' });
 
-        console.log(`🔍 Verificando duração do vídeo...`);
+        const videoId = extractVideoId(url);
+        if (!videoId) return res.status(400).json({ error: 'URL do YouTube inválida' });
 
-        const duracao = await new Promise((resolve, reject) => {
-            const proc = spawn(ytDlpPath, [...ytArgs, '--print', 'duration', url], { shell: process.platform === 'win32' });
-            let output = '';
-            let errOutput = '';
-            proc.stdout.on('data', d => output += d);
-            proc.stderr.on('data', d => errOutput += d);
-            proc.on('close', code => {
-                if (errOutput) console.error(`⚠️ yt-dlp stderr: ${errOutput.trim()}`);
-                if (code !== 0) return reject(`Erro ao obter duração (exit ${code}): ${errOutput.trim() || 'sem detalhes'}`);
-                resolve(parseFloat(output.trim()));
+        console.log(`🔍 Buscando informações do vídeo ${videoId}...`);
+
+        let duration;
+        try {
+            const ytRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+                params: { id: videoId, part: 'contentDetails', key: YOUTUBE_API_KEY }
             });
-            proc.on('error', reject);
-        });
+            if (!ytRes.data.items || ytRes.data.items.length === 0) {
+                return res.status(400).json({ error: 'Vídeo não encontrado' });
+            }
+            duration = parseISO8601(ytRes.data.items[0].contentDetails.duration);
+        } catch (ytErr) {
+            console.error(`⚠️ YouTube API erro:`, ytErr.response?.data || ytErr.message);
+            return res.status(500).json({ error: 'Erro ao buscar dados do vídeo', details: ytErr.message });
+        }
 
-        if (duracao > MAX_DURATION) {
-            const minutos = Math.floor(duracao / 60);
+        if (duration > MAX_DURATION) {
+            const minutos = Math.floor(duration / 60);
             const maxMin = Math.floor(MAX_DURATION / 60);
             return res.status(400).json({
                 error: `Vídeo de ${minutos}min excede o limite de ${maxMin}min. Escolha um vídeo mais curto.`
             });
         }
 
-        console.log(`✅ Duração: ${Math.floor(duracao / 60)}min ${Math.floor(duracao % 60)}s (limite: ${MAX_DURATION}s)`);
+        console.log(`✅ Duração: ${Math.floor(duration / 60)}min ${Math.floor(duration % 60)}s (limite: ${MAX_DURATION}s)`);
+        console.log(`🚀 Baixando áudio de ${url}`);
 
         const timestamp = Date.now();
-        const audioFile = path.join(outputFolder, `audio_${timestamp}.mp3`);
+        const audioFile = path.join(outputFolder, `audio_${timestamp}.webm`);
 
-        console.log(`🚀 Processando: ${url}`);
-
-        const downloader = spawn(ytDlpPath, [...ytArgs, '--no-playlist', '-x', '--audio-format', 'mp3', '-o', audioFile, url], { shell: process.platform === 'win32' });
-        let dlErr = '';
-        downloader.stderr.on('data', d => dlErr += d);
-
-        downloader.on('close', async (code) => {
-            if (dlErr) console.error(`⚠️ yt-dlp download stderr: ${dlErr.trim()}`);
-            if (code !== 0) return res.status(500).json({ error: 'Erro no download', details: dlErr.trim() || null });
-
-            const formData = new FormData();
-            formData.append('file', fs.createReadStream(audioFile));
-            formData.append('model', 'whisper-large-v3');
-            formData.append('response_format', 'verbose_json');
-
-            try {
-                const response = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
-                    headers: { ...formData.getHeaders(), 'Authorization': `Bearer ${GROQ_API_KEY}` }
-                });
-
-                const legendaJson = response.data.segments.map(s => ({
-                    start: s.start,
-                    end: s.end,
-                    text: s.text.trim()
-                }));
-
-                res.json({ status: 'success', data: legendaJson });
-
-            } catch (err) {
-                res.status(500).json({ error: 'Erro na IA', details: err.message });
-            } finally {
-                if (fs.existsSync(audioFile)) fs.unlinkSync(audioFile);
-            }
+        await new Promise((resolve, reject) => {
+            const stream = ytdl(videoId, { filter: 'audioonly', quality: 'lowestaudio' });
+            const fileStream = fs.createWriteStream(audioFile);
+            stream.pipe(fileStream);
+            stream.on('end', resolve);
+            stream.on('error', reject);
+            fileStream.on('error', reject);
         });
+
+        console.log(`✅ Áudio baixado, enviando para Groq Whisper...`);
+
+        const formData = new FormData();
+        formData.append('file', fs.createReadStream(audioFile));
+        formData.append('model', 'whisper-large-v3');
+        formData.append('response_format', 'verbose_json');
+
+        let groqResponse;
+        try {
+            groqResponse = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
+                headers: { ...formData.getHeaders(), 'Authorization': `Bearer ${GROQ_API_KEY}` },
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity
+            });
+        } finally {
+            if (fs.existsSync(audioFile)) fs.unlinkSync(audioFile);
+        }
+
+        const legendaJson = groqResponse.data.segments.map(s => ({
+            start: s.start,
+            end: s.end,
+            text: s.text.trim()
+        }));
+
+        res.json({ status: 'success', data: legendaJson });
+
     } catch (err) {
         console.error(`❌ Erro no handler: ${err}`);
-        res.status(500).json({ error: 'Erro interno', details: err.message || err });
+        const msg = err.message || String(err);
+        if (msg.includes('Private') || msg.includes('private')) {
+            return res.status(400).json({ error: 'Vídeo privado. Escolha um vídeo público.' });
+        }
+        res.status(500).json({ error: 'Erro interno', details: msg });
     }
 });
 
