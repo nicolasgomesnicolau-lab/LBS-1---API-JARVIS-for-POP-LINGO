@@ -20,6 +20,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const outputFolder = process.env.OUTPUT_FOLDER || '/tmp/jarvis-audios';
 const MAX_DURATION = parseInt(process.env.MAX_DURATION) || 600;
+const COOKIE_FILE = path.join(outputFolder, 'cookies.txt');
 
 if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
 
@@ -59,6 +60,24 @@ function parseISO8601(duration) {
     return h * 3600 + m * 60 + s;
 }
 
+app.post('/cookies', authMiddleware, async (req, res) => {
+    try {
+        const { cookies } = req.body;
+        if (!cookies) {
+            return res.status(400).json({
+                error: 'Envie os cookies no campo "cookies".',
+                como_obter: '1. Acesse youtube.com logado no Chrome. 2. DevTools > Application > Cookies > youtube.com. 3. Clique em qualquer cookie, Ctrl+A, copie como "Cookie string". 4. Envie aqui via POST /cookies com {"cookies": "seu_string_aqui"}'
+            });
+        }
+        fs.writeFileSync(COOKIE_FILE, cookies, 'utf-8');
+        console.log(`🍪 Cookies salvos (${cookies.length} chars)`);
+        res.json({ status: 'success', message: 'Cookies salvos com sucesso.' });
+    } catch (err) {
+        console.error(`❌ Erro ao salvar cookies: ${err}`);
+        res.status(500).json({ error: 'Erro ao salvar cookies' });
+    }
+});
+
 app.post('/transcrever', async (req, res) => {
     try {
         const { url } = req.body;
@@ -97,8 +116,13 @@ app.post('/transcrever', async (req, res) => {
         const timestamp = Date.now();
         const audioFile = path.join(outputFolder, `audio_${timestamp}.webm`);
 
+        const requestOptions = {};
+        if (fs.existsSync(COOKIE_FILE)) {
+            const raw = fs.readFileSync(COOKIE_FILE, 'utf-8').trim();
+            if (raw) requestOptions.headers = { Cookie: raw };
+        }
         await new Promise((resolve, reject) => {
-            const stream = ytdl(videoId, { filter: 'audioonly', quality: 'lowestaudio' });
+            const stream = ytdl(videoId, { filter: 'audioonly', quality: 'lowestaudio', requestOptions });
             const fileStream = fs.createWriteStream(audioFile);
             stream.pipe(fileStream);
             stream.on('end', resolve);
