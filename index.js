@@ -6,7 +6,7 @@ const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 
-const outputFolder = `C:/Users/W4xxy/Downloads/jarvis`;
+const outputFolder = process.env.OUTPUT_FOLDER || `C:/Users/W4xxy/Downloads/jarvis`;
 const ytDlpPath = process.env.YT_DLP_PATH || '.\\yt-dlp.exe';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
@@ -33,7 +33,7 @@ async function rodar() {
         '--audio-format', 'mp3',
         '-o', audioFile,
         url
-    ], { shell: true });
+    ], { shell: process.platform === 'win32' });
 
     downloader.on('close', async (code) => {
         if (code !== 0) return console.log('❌ Erro no download. Verifique o link.');

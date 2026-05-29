@@ -10,14 +10,17 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
-app.use(cors()); // Permite que o Lovable acesse sua API
+app.use(cors());
 
 const API_KEY = process.env.API_KEY;
-const outputFolder = process.env.OUTPUT_FOLDER || 'C:/Users/W4xxy/Downloads/jarvis';
-const ytDlpPath = process.env.YT_DLP_PATH || '.\\yt-dlp.exe';
+const outputFolder = process.env.OUTPUT_FOLDER || '/tmp/jarvis-audios';
+const ytDlpPath = process.env.YT_DLP_PATH || 'yt-dlp';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const MAX_DURATION = parseInt(process.env.MAX_DURATION) || 600; // segundos (padrão 10min)
+const MAX_DURATION = parseInt(process.env.MAX_DURATION) || 600;
+
+if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
 
 function authMiddleware(req, res, next) {
     const key = req.headers['x-api-key'];
@@ -41,7 +44,7 @@ app.post('/transcrever', async (req, res) => {
     console.log(`🔍 Verificando duração do vídeo...`);
 
     const duracao = await new Promise((resolve, reject) => {
-        const proc = spawn(ytDlpPath, ['--print', 'duration', url], { shell: true });
+        const proc = spawn(ytDlpPath, ['--print', 'duration', url], { shell: process.platform === 'win32' });
         let output = '';
         proc.stdout.on('data', d => output += d);
         proc.on('close', code => {
@@ -68,7 +71,7 @@ app.post('/transcrever', async (req, res) => {
 
     const downloader = spawn(ytDlpPath, [
         '--no-playlist', '-x', '--audio-format', 'mp3', '-o', audioFile, url
-    ], { shell: true });
+    ], { shell: process.platform === 'win32' });
 
     downloader.on('close', async (code) => {
         if (code !== 0) return res.status(500).json({ error: 'Erro no download' });
