@@ -17,6 +17,7 @@ app.use(cors());
 const API_KEY = process.env.API_KEY;
 const outputFolder = process.env.OUTPUT_FOLDER || '/tmp/jarvis-audios';
 const ytDlpPath = process.env.YT_DLP_PATH || 'yt-dlp';
+const ytArgs = ['--js-runtimes', 'node:node', '--extractor-args', 'youtube:player_client=android'];
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const MAX_DURATION = parseInt(process.env.MAX_DURATION) || 600;
 
@@ -45,7 +46,7 @@ app.post('/transcrever', async (req, res) => {
         console.log(`🔍 Verificando duração do vídeo...`);
 
         const duracao = await new Promise((resolve, reject) => {
-            const proc = spawn(ytDlpPath, ['--js-runtimes', 'node:node', '--print', 'duration', url], { shell: process.platform === 'win32' });
+            const proc = spawn(ytDlpPath, [...ytArgs, '--print', 'duration', url], { shell: process.platform === 'win32' });
             let output = '';
             let errOutput = '';
             proc.stdout.on('data', d => output += d);
@@ -73,9 +74,7 @@ app.post('/transcrever', async (req, res) => {
 
         console.log(`🚀 Processando: ${url}`);
 
-        const downloader = spawn(ytDlpPath, [
-            '--js-runtimes', 'node:node', '--no-playlist', '-x', '--audio-format', 'mp3', '-o', audioFile, url
-        ], { shell: process.platform === 'win32' });
+        const downloader = spawn(ytDlpPath, [...ytArgs, '--no-playlist', '-x', '--audio-format', 'mp3', '-o', audioFile, url], { shell: process.platform === 'win32' });
         let dlErr = '';
         downloader.stderr.on('data', d => dlErr += d);
 
