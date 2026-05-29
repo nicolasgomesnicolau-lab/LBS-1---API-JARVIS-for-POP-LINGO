@@ -17,7 +17,7 @@ app.use(cors());
 const API_KEY = process.env.API_KEY;
 const outputFolder = process.env.OUTPUT_FOLDER || '/tmp/jarvis-audios';
 const ytDlpPath = process.env.YT_DLP_PATH || 'yt-dlp';
-const ytArgs = ['--js-runtimes', 'node:node', '--extractor-args', 'youtube:player_client=android'];
+const ytArgs = ['--js-runtimes', 'node:node', '--extractor-args', 'youtube:player_client=android_embedded,android,tv_embedded,web', '--user-agent', 'Mozilla/5.0 (Linux; Android 14; Pixel 9) AppleWebKit/537.36'];
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const MAX_DURATION = parseInt(process.env.MAX_DURATION) || 600;
 
