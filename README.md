@@ -1,55 +1,69 @@
-# Pop Lingo Jarvis API 🤖
+# Pop Lingo Jarvis API
 
-Backend que baixa áudio do YouTube e transcreve via Groq Whisper.
+Backend que baixa áudio do YouTube e transcreve via Groq Whisper. Roda **localmente** na sua máquina e é exposto via **ngrok** para ser consumido pelo Lovable ou qualquer frontend.
 
----
+## Requisitos
 
-## 🚀 Deploy na Nuvem (Railway, Render, Fly.io)
+Antes de começar, instale:
 
-1. **Envie este repositório** para a plataforma. O `Dockerfile` já instala `ffmpeg` e `yt-dlp` — não precisa subir `.exe` nem `.env`.
-
-2. **No painel da plataforma, vá em "Environment Variables"** e cadastre **apenas essas duas** (sem elas a API não funciona):
-
-| Variável | O que colocar |
+| Programa | Onde baixar |
 |---|---|
-| `GROQ_API_KEY` | Sua chave da Groq (começa com `gsk_`) |
-| `API_KEY` | Uma senha forte qualquer, tipo `BKPMa9gNh4Jz1vLTG7idXocREsuIjYpt` |
+| **Node.js 18+** | [nodejs.org](https://nodejs.org) |
+| **yt-dlp.exe** | [github.com/yt-dlp/yt-dlp/releases](https://github.com/yt-dlp/yt-dlp/releases/latest) (baixar `yt-dlp.exe`) |
+| **ffmpeg.exe + ffprobe.exe** | [ffmpeg.org](https://ffmpeg.org/download.html) ou [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (baixar `ffmpeg-release-essentials.zip`) |
+| **ngrok.exe** | [ngrok.com/download](https://ngrok.com/download) (criar conta grátis) |
 
-> As outras (`PORT`, `MAX_DURATION`, `OUTPUT_FOLDER`, `YT_DLP_PATH`) já têm valor padrão no código — só cadastre se quiser mudar.
+Coloque todos os `.exe` na **mesma pasta do projeto**.
 
-3. **Pronto.** A plataforma gera uma URL pública tipo `https://jarvis-api.railway.app`. Use essa URL nas requisições.
+## Instalação
 
----
-
-## ⚙️ Ajustes
-
-### Rate limit (requisições por minuto)
-
-Arquivo `server.js`, linhas 30-34:
-
-```js
-const limiter = rateLimit({
-    windowMs: 60 * 1000,  // 60 segundos
-    max: 10,              // quantas requisições permitidas nesse tempo
-    message: { error: 'Muitas requisições. Aguarde um momento.' }
-});
+```powershell
+git clone https://github.com/nicolasgomesnicolau-lab/LBS-1---API-JARVIS-for-POP-LINGO.git
+cd LBS-1---API-JARVIS-for-POP-LINGO
+npm install
 ```
 
-### Duração máxima do vídeo
+Crie o arquivo `.env` na raiz do projeto:
 
-Mude o `MAX_DURATION` nas variáveis de ambiente. Valor em segundos: `300` = 5min, `1200` = 20min.
+```env
+GROQ_API_KEY=gsk_seu_token_aqui
+API_KEY=uma_senha_forte_qualquer
+```
 
----
+> **GROQ_API_KEY**: chave da Groq (começa com `gsk_`). Crie uma em [console.groq.com/keys](https://console.groq.com/keys)
+> **API_KEY**: senha que você escolhe para autenticar as requisições (pode ser qualquer string)
 
-## 📡 API - Perguntas e Respostas
+## Como usar
 
-### O que eu envio?
+### 1. Ligar o servidor
 
-Uma requisição `POST` para `https://SUA_URL/transcrever`:
-- **Header:** `x-api-key: SUA_CHAVE`
-- **Body (JSON):** `{ "url": "https://youtube.com/watch?v=VIDEO_ID" }`
+Dê **dois cliques** no arquivo `LIGAR_JARVIS.bat`. Ele abre duas janelas:
 
-### O que eu recebo?
+- **Janela 1:** API rodando em `http://localhost:3000`
+- **Janela 2:** Túnel ngrok expondo o servidor para internet
+
+### 2. Pegar a URL pública
+
+Na janela do **ngrok**, procure a linha:
+
+```
+Forwarding    https://abc123.ngrok-free.app -> http://localhost:3000
+```
+
+A URL `https://abc123.ngrok-free.app` é o seu endpoint público. Use ela no Lovable.
+
+> Se preferir um domínio fixo (gratuito), crie um **Static Domain** no [dashboard ngrok](https://dashboard.ngrok.com/cloud-edge/domains) e atualize o `LIGAR_JARVIS.bat` com `--domain=seu-dominio.ngrok-free.app`.
+
+### 3. Transcrever um vídeo
+
+```powershell
+curl -s -X POST "https://SEU_DOMINIO.ngrok-free.app/transcrever" ^
+  -H "Content-Type: application/json" ^
+  -H "x-api-key: SUA_API_KEY" ^
+  -d '{\"url\":\"https://www.youtube.com/watch?v=VIDEO_ID\"}'
+```
+
+## Exemplo de resposta
 
 **Sucesso (200):**
 ```json
@@ -62,28 +76,41 @@ Uma requisição `POST` para `https://SUA_URL/transcrever`:
 }
 ```
 
-**Erros:**
-| Status | Resposta | Motivo |
-|---|---|---|
-| `400` | `{ "error": "URL faltando" }` | Body sem `url` |
-| `400` | `{ "error": "...excede o limite..." }` | Vídeo muito longo |
-| `401` | `{ "error": "Não autorizado..." }` | `x-api-key` errado/ausente |
-| `429` | `{ "error": "Muitas requisições..." }` | Rate limit excedido |
-| `500` | `{ "error": "Erro no download" }` | Download falhou |
+## Códigos de erro
 
-### Exemplo em JavaScript
+| Status | Motivo |
+|---|---|
+| `400` | URL inválida, faltando ou vídeo muito longo |
+| `401` | `x-api-key` ausente ou incorreto |
+| `429` | Muitas requisições (limite: 10/min) |
+| `500` | Erro no download ou na transcrição |
+
+## Variáveis de ambiente (.env)
+
+| Variável | Obrigatória | Padrão | Descrição |
+|---|---|---|---|
+| `GROQ_API_KEY` | Sim | — | Chave da API Groq |
+| `API_KEY` | Sim | — | Chave secreta para autenticar requisições |
+| `PORT` | Não | `3000` | Porta do servidor |
+| `MAX_DURATION` | Não | `600` | Duração máxima do vídeo em segundos |
+| `OUTPUT_FOLDER` | Não | `./audios_temp` | Pasta de áudios temporários |
+
+## Ajustes
+
+### Rate limit
+
+No `server.js`:
 
 ```js
-const res = await fetch('https://sua-url.com/transcrever', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': 'SUA_CHAVE'
-  },
-  body: JSON.stringify({
-    url: 'https://youtube.com/watch?v=VIDEO_ID'
-  })
+const limiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { error: 'Muitas requisições. Aguarde um momento.' }
 });
-const data = await res.json();
-console.log(data.data);
 ```
+
+Mude `max` para aumentar/diminuir o limite por minuto.
+
+### Duração máxima
+
+Via `.env`: `MAX_DURATION=1200` (20 minutos).
