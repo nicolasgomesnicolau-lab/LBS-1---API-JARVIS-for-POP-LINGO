@@ -5,14 +5,13 @@ Backend que **baixa áudio do YouTube** e **transcreve via Groq Whisper**.
 ## Como funciona
 
 ```
-[Lovable/Frontend] 
+[Frontend] 
      ↓ (chama URL pública)
 [ngrok] → cria um túnel da internet pro seu PC
      ↓ 
 [Servidor local (localhost:3000)] → baixa áudio com yt-dlp → manda pro Groq transcrever
-```
 
-**ngrok** é um programa que cria uma URL pública (ex: `https://abc.ngrok-free.app`) que aponta direto pro servidor rodando no seu computador. Assim o Lovable consegue chamar sua API mesmo estando na nuvem.
+**ngrok** é um programa que cria uma URL pública (ex: `https://abc.ngrok-free.app`) que aponta direto pro servidor rodando no seu computador. Assim seu frontend consegue chamar a API.
 
 Depois da primeira configuração, é só **dar dois cliques no `LIGAR_JARVIS.bat`** que tudo sobe automático.
 
@@ -72,7 +71,7 @@ API_KEY=uma_senha_forte_qualquer
 
 ### 4. Configurar ngrok
 
-ngrok é a ponte entre a internet e seu PC. Sem ele, o Lovable não consegue acessar seu servidor local.
+ngrok é a ponte entre a internet e seu PC. Sem ele, seu frontend não consegue acessar o servidor local.
 
 1. Crie conta grátis em [ngrok.com](https://ngrok.com) (login com Google/GitHub)
 2. Pegue seu token: [dashboard.ngrok.com/get-started/your-authtoken](https://dashboard.ngrok.com/get-started/your-authtoken)
@@ -101,7 +100,7 @@ Por padrão, o ngrok gera uma URL diferente toda vez que liga. Para ter a **mesm
 | **Servidor API** | Log do servidor (`🔥 API rodando local em http://localhost:3000`) |
 | **Tunnel Ngrok** | URL pública (`Forwarding https://xxx.ngrok-free.app -> localhost:3000`) |
 
-Na janela do ngrok, copie a URL `https://xxx.ngrok-free.app` e use no Lovable.
+Na janela do ngrok, copie a URL `https://xxx.ngrok-free.app` e use no frontend.
 
 > Se usou domínio fixo no passo 5, a URL é sempre a mesma.
 
