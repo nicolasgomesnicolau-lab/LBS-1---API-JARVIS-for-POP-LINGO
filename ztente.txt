@@ -1,0 +1,32 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN apt-get update && apt-get install -y python3 curl ffmpeg && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp && \
+    npm install
+
+COPY . .
+
+ENV YT_DLP_PATH=yt-dlp
+
+EXPOSE 3000
+
+USER node
+
+CMD ["node", "server.js"]
+
+---
+DICAS:
+- ENV: o nome tem q bater EXATAMENTE com o process.env.NOME usado no codigo
+- CMD: se tem server.js -> CMD ["node", "server.js"]
+       se nao tem server.js -> olhar "main" no package.json -> CMD ["node", "main"]
+- ENV e .env sao coisas diferentes, um nao depende do outro
+- RUN: olhar no topo do codigo por const + spawn / exec / child_process, cada um vira um RUN
+- saber se precisa de ffmpeg: olhar a DOCUMENTACAO do programa q vc instalou (no caso yt-dlp precisa de ffmpeg pra converter audio, mas isso vc descobre lendo o site/docs do yt-dlp, nao no seu codigo)
+- JS/NODE: sempre FROM node + RUN npm install, o node ja vem na imagem
+- RUN curl: /usr/local/bin/yt-dlp é o CAMINHO de instalacao no Linux (equivalente a C:\Program Files ou C:\Windows\System32), nao é pasta do projeto
+- o curl baixa o yt-dlp da internet e salva nessa pasta pra ficar disponivel como comando
