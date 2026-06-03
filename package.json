@@ -5,7 +5,7 @@
   "dependencies": {
     "@chengsokdara/use-whisper": "^0.2.0",
     "@distube/ytdl-core": "^4.16.12",
-    "axios": "^1.15.0",
+    "axios": "^1.16.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^4.22.1",
