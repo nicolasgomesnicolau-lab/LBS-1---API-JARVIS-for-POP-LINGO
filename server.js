@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const { spawn } = require('child_process');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(cors());
 
