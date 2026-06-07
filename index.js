@@ -8,8 +8,6 @@ const FormData = require('form-data');
 
 const outputFolder = process.env.OUTPUT_FOLDER || `C:/Users/W4xxy/Downloads/jarvis`;
 const ytDlpPath = process.env.YT_DLP_PATH || '.\\yt-dlp.exe';
-const proxyUrl = process.env.PROXY_URL || '';
-const proxyArgs = proxyUrl ? ['--proxy', proxyUrl] : [];
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 if (!GROQ_API_KEY) {
@@ -30,7 +28,6 @@ async function rodar() {
     console.log('--- 🎵 1. Baixando Áudio do YouTube ---');
 
     const downloader = spawn(ytDlpPath, [
-        ...proxyArgs,
         '--no-playlist',
         '-x',
         '--audio-format', 'mp3',
