@@ -18,6 +18,8 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const outputFolder = process.env.OUTPUT_FOLDER || path.join(__dirname, 'audios_temp');
 const MAX_DURATION = parseInt(process.env.MAX_DURATION) || 600;
 const ytDlpPath = process.env.YT_DLP_PATH || '.\\yt-dlp.exe';
+const proxyUrl = process.env.PROXY_URL || '';
+const proxyArgs = proxyUrl ? ['--proxy', proxyUrl] : [];
 
 if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
 
@@ -57,7 +59,7 @@ app.post('/transcrever', async (req, res) => {
         console.log(`🔍 Verificando duração do vídeo...`);
 
         const duracao = await new Promise((resolve, reject) => {
-            const proc = spawn(ytDlpPath, ['--print', 'duration', url], { shell: true });
+            const proc = spawn(ytDlpPath, [...proxyArgs, '--print', 'duration', url], { shell: true });
             let output = '';
             let errOutput = '';
             proc.stdout.on('data', d => output += d);
@@ -83,7 +85,7 @@ app.post('/transcrever', async (req, res) => {
         const audioFile = path.join(outputFolder, `audio_${timestamp}.webm`);
 
         console.log(`🚀 Baixando áudio...`);
-        const downloader = spawn(ytDlpPath, ['--no-playlist', '-f', 'bestaudio[ext=webm]', '-o', audioFile, url], { shell: true });
+        const downloader = spawn(ytDlpPath, [...proxyArgs, '--no-playlist', '-f', 'bestaudio[ext=webm]', '-o', audioFile, url], { shell: true });
 
         downloader.on('close', async (code) => {
             if (code !== 0) return res.status(500).json({ error: 'Erro no download' });
